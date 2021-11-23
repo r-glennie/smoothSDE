@@ -29,7 +29,7 @@ Type tr_dens(vector<Type> Z1, vector<Type> Z0, Type dtimes, vector<Type> par,
     for(int i = 0; i < n_dim; i++) {
         // No contribution if either start or end observation is missing
         if(!R_IsNA(asDouble(Z0(i))) && !R_IsNA(asDouble(Z1(i)))) {
-            if(type == "BM") {
+            if(type == "BM" | type == "BM_HMM") {
                 // Brownian motion: dZ_t = mu(t) dt + sigma(t) dW_t
                 // where par = (mu, log(sigma))
                 mean = Z0(i) + par(0) * dtimes;

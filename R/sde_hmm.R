@@ -106,11 +106,22 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             X_fe_list <- lapply(1:nstates, function(i) mats$X_fe)
             X_re_list <- lapply(1:nstates, function(i) mats$X_re)
             S_list <- lapply(1:nstates, function(i) mats$S)
-            X_fe <- bdiag(X_fe_list)
-            X_re <- bdiag(X_re_list)
-            S <- bdiag(S_list)
+            if (!is.null(mats$X_fe)) {
+                X_fe <- bdiag(X_fe_list)
+            } else {
+                X_fe <- NULL
+            }
+            if(!is.null(mats$X_re)) {
+                X_re <- bdiag(X_re_list)
+            } else {
+                X_re <- NULL
+            }
+            if (!is.null(mats$S)) {
+                S <- bdiag(S_list)
+            } else {
+                S <- NULL
+            }
             private$mats_ <- list(X_fe = X_fe, X_re = X_re, S = S)
-            
             # Initial parameters (zero if par0 not provided)
             self$update_coeff_fe(rep(0, sum(ncol_fe)))
             self$update_coeff_re(rep(0, sum(ncol_re)))
@@ -163,7 +174,8 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             # (First fixed effects, then random effects)
             tmb_par <- list(coeff_fe = self$coeff_fe(),
                             log_lambda = 0,
-                            coeff_re = 0)
+                            coeff_re = 0, 
+                            log_tpm = rep(0, self$nstates() * (self$nstates() - 1)))
             
             # Setup random effects
             random <- NULL
@@ -202,8 +214,8 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
                             ID = self$data()$ID,
                             times = self$data()$time,
                             coarse_time = self$data()$coarse_time, 
-                            n_coarse = length(unique(self$data$coarse_time)),
-                            n_states = self$nstates, 
+                            n_coarse = length(unique(self$data()$coarse_time)),
+                            n_states = self$nstates(), 
                             obs = as.matrix(self$obs()),
                             X_fe = X_fe,
                             X_re = X_re,
@@ -245,12 +257,14 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             
             # Negative log-likelihood function
             private$tmb_obj_ <- tmb_obj
-        },
+        }, 
+        
+        nstates = function() {return(private$nstates_)}
         
     ), 
                     
     private = list(
-        nstates_ = NULL, 
+        nstates_ = NULL
                         
     )
 )

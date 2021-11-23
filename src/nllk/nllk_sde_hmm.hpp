@@ -1,6 +1,6 @@
 
-#ifndef _SDE_
-#define _SDE_
+#ifndef _SDE_HMM_
+#define _SDE_HMM_
 
 #include "tr_dens.hpp"
 
@@ -20,7 +20,7 @@ Type nllk_sde_hmm(objective_function<Type>* obj) {
     DATA_STRING(type); // Model type for each response variable
     DATA_VECTOR(ID); // Time series ID
     DATA_VECTOR(times); // Observation times 
-    DATA_VECTOR(coarse_time); // Coarse times 
+    DATA_IVECTOR(coarse_time); // Coarse times 
     DATA_INTEGER(n_coarse); // Number of coarse time points 
     DATA_INTEGER(n_states); // Number of coarse states 
     DATA_MATRIX(obs); // Response variables
@@ -103,19 +103,21 @@ Type nllk_sde_hmm(objective_function<Type>* obj) {
     //=========================//
     // Coarse Scale Likelihood //
     //=========================//
-    Type llk = 0; 
-    vector<Type> phi(delta); 
+    Type llk = 0;
+    Type sumphi; 
+    matrix<Type> phi(delta);
     for (int i = 0; i < n_coarse; ++i) {
         // Re-initialise phi at first observation of each time series
         if(i == 0 || ID(i-1) != ID(i)) {
             phi = delta;
         }
-        phi = (phi.array() * fine_llks.row(i).array()).matrix();
+        phi = (phi.array() * fine_llks.row(i).array().exp()).matrix();
         phi = phi * tpm;
         sumphi = phi.sum();
         llk = llk + log(sumphi);
         phi = phi / sumphi;
     }
+  
     
     //===================//
     // Smoothing penalty //
