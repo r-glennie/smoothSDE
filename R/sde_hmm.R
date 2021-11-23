@@ -95,13 +95,6 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             
             # Save terms of model formulas and model matrices
             mats <- self$make_mat()
-            ncol_fe <- mats$ncol_fe * nstates
-            ncol_re <- mats$ncol_re * nstates 
-            private$terms_ <- list(ncol_fe = ncol_fe,
-                                   ncol_re = ncol_re,
-                                   names_fe = paste0(rep(colnames(mats$X_fe), nstates), rep(1:nstates, each = ncol(mats$X_fe))),
-                                   names_re_all = paste0(rep(colnames(mats$X_re), nstates), rep(1:nstates, each = ncol(mats$X_re))),
-                                   names_re = rep(names(ncol_re), nstates))
             # Convert design matrices to multi-state design matrices 
             X_fe_list <- lapply(1:nstates, function(i) mats$X_fe)
             X_re_list <- lapply(1:nstates, function(i) mats$X_re)
@@ -122,6 +115,13 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
                 S <- NULL
             }
             private$mats_ <- list(X_fe = X_fe, X_re = X_re, S = S)
+            ncol_fe <- rep(mats$ncol_fe, nstates) 
+            ncol_re <- rep(mats$ncol_re, nstates) 
+            private$terms_ <- list(ncol_fe = ncol_fe,
+                                   ncol_re = ncol_re,
+                                   names_fe = paste0(rep(colnames(mats$X_fe), nstates), rep(1:nstates, each = ncol(mats$X_fe))),
+                                   names_re_all = paste0(rep(colnames(mats$X_re), nstates), rep(1:nstates, each = ncol(mats$X_re))),
+                                   names_re = rep(names(mats$ncol_re), nstates))
             # Initial parameters (zero if par0 not provided)
             self$update_coeff_fe(rep(0, sum(ncol_fe)))
             self$update_coeff_re(rep(0, sum(ncol_re)))
@@ -259,7 +259,81 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             private$tmb_obj_ <- tmb_obj
         }, 
         
-        nstates = function() {return(private$nstates_)}
+        nstates = function() {return(private$nstates_)}, 
+        
+        #' @description Get SDE parameters
+        #' 
+        #' @param t Time points for which the parameters should be returned.
+        #' If "all", returns parameters for all time steps. Default: 1.
+        #' @param X_fe Optional design matrix for fixed effects, as returned
+        #' by \code{make_mat}. By default, uses design matrix from data.
+        #' @param X_re Optional design matrix for random effects, as returned
+        #' by \code{make_mat}. By default, uses design matrix from data.
+        #' @param coeff_fe Optional vector of fixed effect parameters
+        #' @param coeff_re Optional vector of random effect parameters
+        #' @param resp Logical (default: TRUE). Should the output be on 
+        #' the response scale? If FALSE, the output is on the linear 
+        #' predictor scale.
+        #' @param T total number of time points 
+        #' 
+        #' @return Matrix with one row for each time point in t, and one
+        #' column for each SDE parameter
+        par = function(t = 1, state = 1, X_fe = NULL, X_re = NULL, 
+                       coeff_fe = NULL, coeff_re = NULL, 
+                       resp = TRUE, n = NULL) {
+            # Use design matrices from data if not provided
+            if(is.null(X_fe)) {
+                X_fe <- self$mats()$X_fe
+            }
+            
+            if(is.null(X_re)) {
+                # Apply decay if necessary
+                if(is.null(self$other_data()$t_decay)) {
+                    X_re <- self$mats()$X_re
+                } else {
+                    X_re <- self$X_re_decay()
+                }
+            }
+            
+            # Use estimated coeff if not provided
+            if(is.null(coeff_fe))
+                coeff_fe <- self$coeff_fe()
+            if(is.null(coeff_re))
+                coeff_re <- self$coeff_re()
+            
+            # if null, use observations 
+            if (is.null(n)) {
+                n <- nrow(self$data())
+            }
+            
+            # Get linear predictor and put into matrix where each row
+            # corresponds to a time step and each column to a parameter
+            lp <- X_fe %*% coeff_fe + X_re %*% coeff_re
+            lp_mat <- matrix(lp, ncol = length(self$formulas()))
+            
+            # Apply inverse link to get parameters on natural scale
+            if(resp) {
+                par_mat <- matrix(NA, nrow = nrow(lp_mat), ncol = ncol(lp_mat))
+                for(i in 1:ncol(lp_mat)) {
+                    par_mat[,i] <- self$invlink()[[i]](lp_mat[,i])
+                }                
+            } else {
+                par_mat <- lp_mat
+            }
+            colnames(par_mat) <- names(self$invlink())
+            
+            # Keep rows of par_mat given in 't'
+            if(length(t) == 1) {
+                if(t == "all")
+                    t <- 1:n
+            }
+            if(any(t < 1 | t > nrow(par_mat))) {
+                stop("'t' should be between 1 and", nrow(par_mat))
+            }
+            par_mat <- par_mat[t + (state - 1) * n,, drop = FALSE]
+            
+            return(par_mat)
+        }
         
     ), 
                     
