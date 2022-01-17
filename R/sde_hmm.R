@@ -33,6 +33,7 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
         #' 
         #' @return A new SDE object
         initialize = function(formulas, data, type, response, nstates = 2, par0 = NULL, 
+                              tpm0 = NULL, 
                               fixpar = NULL, other_data = NULL) {
             private$formulas_ <- formulas
             private$type_ <- type
@@ -130,7 +131,7 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             # Set initial fixed effect coefficients if provided (par0)
             if(!is.null(par0)) {
                 # Number of SDE parameters
-                n_par <- length(self$formulas()) * nstates 
+                n_par <- length(self$formulas())  
                 
                 if(length(par0) != n_par) {
                     stop("'par0' should be of length ", n_par,
@@ -139,14 +140,19 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
                 }
                 
                 # First column of X_fe for each SDE parameter
-                i0 <- c(1, cumsum(ncol_fe)[-n_par] + 1)
+                i0 <- c(1, cumsum(mats$ncol_fe)[-n_par] + 1)
                 
                 # Apply link to get parameters on working scale
                 for (b in 1:nstates) {
-                    private$coeff_fe_[i0 + (b - 1) * mats$ncol_fe] <- sapply(1:n_par, function(i) {
+                    private$coeff_fe_[i0 + (b - 1) * sum(mats$ncol_fe)] <- sapply(1:n_par, function(i) {
                         self$link()[[i]](par0[i])
                     })
                 }
+            }
+            if (!is.null(tpm0)) {
+                private$tpm_ <- tpm0
+            } else {
+                private$tpm_ <- matrix(1/nstates, nr = nstates, nc = nstates)
             }
             private$other_data_ <- other_data
             private$nstates_ <- nstates
@@ -170,12 +176,16 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             ncol_fe <- self$terms()$ncol_fe
             ncol_re <- self$terms()$ncol_re
             
+            # Get tpm parameters
+            log_tpm <- log(self$tpm() / diag(self$tpm()))
+            log_tpm <- as.vector(log_tpm[!diag(self$nstates())])
+            
             # Format initial parameters for TMB
             # (First fixed effects, then random effects)
             tmb_par <- list(coeff_fe = self$coeff_fe(),
                             log_lambda = 0,
                             coeff_re = 0, 
-                            log_tpm = rep(0, self$nstates() * (self$nstates() - 1)))
+                            log_tpm = log_tpm)
             
             # Setup random effects
             random <- NULL
@@ -333,12 +343,17 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             par_mat <- par_mat[t + (state - 1) * n,, drop = FALSE]
             
             return(par_mat)
-        }
+        }, 
+        
+        tpm = function() {return(private$tpm_)}, 
+        
+        update_tpm = function(new_tpm) {private$tpm_ <- new_tpm}
         
     ), 
                     
     private = list(
-        nstates_ = NULL
+        nstates_ = NULL, 
+        tpm_ = NULL
                         
     )
 )
