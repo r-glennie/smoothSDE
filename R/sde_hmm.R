@@ -345,7 +345,17 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             return(par_mat)
         }, 
         
-        tpm = function() {return(private$tpm_)}, 
+        tpm = function() {
+            if (!is.null(private$tmb_rep_)) {
+                par <- private$tmb_rep_$par.fixed[names(private$tmb_rep_$par.fixed) == "log_tpm"]
+                tpm <- diag(self$nstates())
+                tpm[!diag(self$nstates())] <- exp(par)
+                tpm <- t(tpm) # transpose to fill by rows (like in C++)
+                tpm <- tpm / rowSums(tpm)
+                private$tpm_ <- tpm 
+            }    
+            return(private$tpm_)
+        }, 
         
         update_tpm = function(new_tpm) {private$tpm_ <- new_tpm}
         
