@@ -93,7 +93,7 @@ Type nllk_sde_hmm(objective_function<Type>* obj) {
         // Loop over observations
         for(int i = 1; i < n; i ++) {
             // No contribution if first observation of the track
-            if(ID(i-1) == ID(i)) {
+            if(ID(i-1) == ID(i) & coarse_time(i-1) == coarse_time(i)) {
                 fine_llks(coarse_time(i) - 1, b) = fine_llks(coarse_time(i) - 1, b) + tr_dens<Type>(obs.row(i), obs.row(i-1), dtimes(i-1),
                                           par_mat.row(i-1 + b * n), true, type, other_data);
             }
@@ -104,21 +104,24 @@ Type nllk_sde_hmm(objective_function<Type>* obj) {
     // Coarse Scale Likelihood //
     //=========================//
     Type llk = 0;
+    Type logsumphi; 
     Type sumphi; 
+    Type scaler; 
     matrix<Type> phi(delta);
     for (int i = 0; i < n_coarse; ++i) {
         // Re-initialise phi at first observation of each time series
         if(i == 0 || ID(i-1) != ID(i)) {
             phi = delta;
         }
-        phi = (phi.array() * fine_llks.row(i).array().exp()).matrix();
+        // Use log sum of exponentials of fine_llks as scaler to prevent numerical problems 
+        scaler = fine_llks.row(i).maxCoeff(); 
+        phi = (phi.array() * (fine_llks.row(i).array() - scaler).exp()).matrix();
         phi = phi * tpm;
-        sumphi = phi.sum();
-        llk = llk + log(sumphi);
-        phi = phi / sumphi;
+        logsumphi = log(phi.sum()) + scaler;
+        llk = llk + logsumphi;
+        phi = phi / phi.sum();
     }
   
-    
     //===================//
     // Smoothing penalty //
     //===================//
