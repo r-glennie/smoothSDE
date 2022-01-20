@@ -131,21 +131,22 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             # Set initial fixed effect coefficients if provided (par0)
             if(!is.null(par0)) {
                 # Number of SDE parameters
-                n_par <- length(self$formulas())  
+                n_form <- length(self$formulas())
+                n_par <- n_form * nstates  
                 
                 if(length(par0) != n_par) {
                     stop("'par0' should be of length ", n_par,
                          " with one entry for each SDE parameter (",
-                         paste0(names(self$formulas()), collapse = ", "), ")")
+                         paste0(names(self$formulas()), collapse = ", "), ") for each state")
                 }
                 
                 # First column of X_fe for each SDE parameter
-                i0 <- c(1, cumsum(mats$ncol_fe)[-n_par] + 1)
+                i0 <- c(1, cumsum(mats$ncol_fe)[-n_form] + 1)
                 
                 # Apply link to get parameters on working scale
                 for (b in 1:nstates) {
-                    private$coeff_fe_[i0 + (b - 1) * sum(mats$ncol_fe)] <- sapply(1:n_par, function(i) {
-                        self$link()[[i]](par0[i])
+                    private$coeff_fe_[i0 + (b - 1) * sum(mats$ncol_fe)] <- sapply(1:n_form, function(i) {
+                        self$link()[[i]](par0[i + (b - 1) * n_form])
                     })
                 }
             }
