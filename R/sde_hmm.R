@@ -120,8 +120,8 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             ncol_re <- rep(mats$ncol_re, nstates) 
             private$terms_ <- list(ncol_fe = ncol_fe,
                                    ncol_re = ncol_re,
-                                   names_fe = paste0(rep(colnames(mats$X_fe), nstates), rep(1:nstates, each = ncol(mats$X_fe))),
-                                   names_re_all = paste0(rep(colnames(mats$X_re), nstates), rep(1:nstates, each = ncol(mats$X_re))),
+                                   names_fe = paste0(rep(colnames(mats$X_fe), each = nstates), rep(1:nstates, ncol(mats$X_fe))),
+                                   names_re_all = paste0(rep(colnames(mats$X_re), each = nstates), rep(1:nstates, ncol(mats$X_re))),
                                    names_re = rep(names(mats$ncol_re), nstates))
             # Initial parameters (zero if par0 not provided)
             self$update_coeff_fe(rep(0, sum(ncol_fe)))
@@ -345,6 +345,98 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             
             return(par_mat)
         }, 
+        
+        #' @description Confidence intervals for SDE parameters
+        #'
+        #' @param X_fe Design matrix for fixed effects, as returned
+        #' by \code{make_mat}
+        #' @param X_re Design matrix for random effects, as returned
+        #' by \code{make_mat}
+        #' @param state which state to compute CIs for 
+        #' @param level Confidence level (default: 0.95 for 95\% confidence 
+        #' intervals)
+        #' @param n_post Number of posterior samples from which the confidence
+        #' intervals are calculated. Larger values will reduce approximation
+        #' error, but increase computation time. Defaults to 1000.
+        #' 
+        #' @details This method generates confidence intervals by simulation.
+        #' That is, it generates \code{n_post} posterior samples of 
+        #' the estimated parameters from a multivariate normal distribution,
+        #' where the mean is the vector of estimates and the covariance matrix 
+        #' is provided by TMB. Then, transition probabilities are derived for 
+        #' each set of posterior parameter values, and confidence intervals
+        #' are obtained as quantiles of the posterior simulated transition
+        #' probabilities.
+        #' 
+        #' @return List with elements:
+        #' \itemize{
+        #'   \item{\code{low}}{Matrix of lower bounds of confidence intervals.}
+        #'   \item{\code{upp}}{Matrix of upper bounds of confidence intervals.}
+        #' }
+        CI = function(state = 1, X_fe = NULL, X_re = NULL,  level = 0.95, n_post = 1e3) {
+            # Number of states
+            n_par <- length(self$formulas())
+            # Use design matrices from data if not provided
+            if(is.null(X_fe)) {
+                X_fe <- self$mats()$X_fe
+            }
+            
+            if(is.null(X_re)) {
+                # Apply decay if necessary
+                if(is.null(self$other_data()$t_decay)) {
+                    X_re <- self$mats()$X_re
+                } else {
+                    X_re <- self$X_re_decay()
+                }
+            }
+            # Number of time steps
+            n_grid <- nrow(X_fe)/n_par
+            
+            # Get parameter estimates and covariance matrix
+            rep <- self$tmb_rep()
+            if(is.null(rep$jointPrecision)) {
+                par <- rep$par.fixed
+                V <- rep$cov.fixed    
+            } else {
+                par <- c(rep$par.fixed, rep$par.random)
+                V <- solve(rep$jointPrecision)
+            }
+            
+            # Generate samples from MVN estimator distribution
+            post <- rmvn(n = n_post, mu = par, V = V)
+            
+            # Split up simulated coefficients for fixed and random effects
+            wh_fixed <- self$ind_fixcoeff()
+            if(length(wh_fixed) > 0) {
+                # If any fixed parameter, use fixed value
+                post_coeff_fe <- matrix(NA, nrow = nrow(post), ncol = length(self$coeff_fe()))
+                post_coeff_fe[, -wh_fixed] <- post[, which(colnames(post) == "coeff_fe")]
+                post_coeff_fe[, wh_fixed] <- rep(self$coeff_fe()[wh_fixed], each = n_post)                
+            } else {
+                post_coeff_fe <- post[, which(colnames(post) == "coeff_fe")]
+            }
+            post_coeff_re <- post[, which(colnames(post) == "coeff_re")]
+            
+            # Get SDE parameters over rows of X_fe and X_re, for each 
+            # posterior sample of coeff_fe and coeff_re
+            post_par <- sapply(1:n_post, function(i) {
+                self$par(t = "all", state = state, 
+                         coeff_fe = post_coeff_fe[i,], 
+                         coeff_re = post_coeff_re[i,])
+            })
+            
+            # Get confidence intervals as quantiles of posterior tpms
+            alpha <- (1 - level)/2
+            CI <- t(apply(post_par, 1, quantile, probs = c(alpha, 1 - alpha)))
+            
+            # Format matrices for lower and upper bounds
+            low <- matrix(CI[,1], ncol = n_par)
+            upp <- matrix(CI[,2], ncol = n_par)
+            colnames(low) <- names(self$formulas())
+            colnames(upp) <- names(self$formulas())
+            
+            return(list(low = low, upp = upp))
+        },
         
         tpm = function() {
             if (!is.null(private$tmb_rep_)) {
