@@ -35,14 +35,14 @@ Type tr_dens(vector<Type> Z1, vector<Type> Z0, Type dtimes, vector<Type> par,
                 mean = Z0(i) + par(0) * dtimes;
                 sd = exp(par(1)) * sqrt(dtimes);
                 res = res + dnorm(Z1(i), mean, sd, true);
-            } else if(type == "BM-t") {
+            } else if(type == "BM-t" | type == "BM_HMM") {
                 // Brownian motion with t-distributed noise
                 Type df = other_data(0); // number of degrees of freedom
                 mean = par(0) * dtimes;
                 sd = exp(par(1)) * sqrt(dtimes);
                 Type scale = sd/sqrt(df/(df-2));
                 res = res + dt((Z1(i)-Z0(i)-mean)/scale, df, true) - log(scale);
-            } else if(type == "OU") {
+            } else if(type == "OU" | type == "OU_HMM") {
                 // Ornstein-Uhlenbeck: 
                 // dZ_t = 1/tau(t) (mu(t) - Z_t) dt + sqrt(2*kappa(t)/tau(t)) dW_t
                 // where par = mu_1, mu_2, ..., mu_d, log(tau), log(kappa)
