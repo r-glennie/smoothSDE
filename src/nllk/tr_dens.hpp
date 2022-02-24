@@ -35,7 +35,7 @@ Type tr_dens(vector<Type> Z1, vector<Type> Z0, Type dtimes, vector<Type> par,
                 mean = Z0(i) + par(0) * dtimes;
                 sd = exp(par(1)) * sqrt(dtimes);
                 res = res + dnorm(Z1(i), mean, sd, true);
-            } else if(type == "BM-t" | type == "BM_HMM") {
+            } else if(type == "BM-t" | type == "BM-t_HMM") {
                 // Brownian motion with t-distributed noise
                 Type df = other_data(0); // number of degrees of freedom
                 mean = par(0) * dtimes;
