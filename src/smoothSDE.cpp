@@ -18,6 +18,8 @@ Type objective_function<Type>::operator() () {
         return nllk_eseal_ssm(this);
     } else if (type == "BM_HMM") {
         return nllk_sde_hmm(this); 
+    } else if (type == "BM-t_HMM") {
+        return nllk_sde_hmm(this); 
     } else {
         error ("Unknown SDE type");
     }
