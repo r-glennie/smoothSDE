@@ -47,9 +47,11 @@ Type nllk_sde_hmm(objective_function<Type>* obj) {
     vector<Type> par_vec = X_fe * coeff_fe + X_re * coeff_re;
     matrix<Type> par_mat(n * n_states, par_vec.size()/(n * n_states));
     for(int i = 0; i < par_mat.cols(); i++) {
-        // Matrix with one row for each time step and
-        // one column for each parameter
-        par_mat.col(i) = par_vec.segment(i * n * n_states, n * n_states);
+        for (int j = 0; j < n_states; ++j) {
+            // Matrix with one row for each time step and
+            // one column for each parameter
+            par_mat.col(i).segment(j * n, n) = par_vec.segment(j * n * n_states + i * n, n);
+        }
     }
     
     // Transition probability matrix

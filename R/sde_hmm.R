@@ -120,8 +120,8 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             ncol_re <- rep(mats$ncol_re, nstates) 
             private$terms_ <- list(ncol_fe = ncol_fe,
                                    ncol_re = ncol_re,
-                                   names_fe = paste0(rep(colnames(mats$X_fe), each = nstates), rep(1:nstates, ncol(mats$X_fe))),
-                                   names_re_all = paste0(rep(colnames(mats$X_re), each = nstates), rep(1:nstates, ncol(mats$X_re))),
+                                   names_fe = paste0(rep(colnames(mats$X_fe), nstates), rep(1:nstates, each = ncol(mats$X_fe))),
+                                   names_re_all = paste0(rep(colnames(mats$X_re), nstates), rep(1:nstates, each = ncol(mats$X_re))),
                                    names_re = rep(names(mats$ncol_re), nstates))
             # Initial parameters (zero if par0 not provided)
             self$update_coeff_fe(rep(0, sum(ncol_fe)))
@@ -320,6 +320,8 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             # Get linear predictor and put into matrix where each row
             # corresponds to a time step and each column to a parameter
             lp <- X_fe %*% coeff_fe + X_re %*% coeff_re
+            nlen <- length(self$formulas()) * nrow(self$data())
+            lp <- lp[((state - 1)*nlen + 1):(state*nlen)]
             lp_mat <- matrix(lp, ncol = length(self$formulas()))
             
             # Apply inverse link to get parameters on natural scale
@@ -341,7 +343,7 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             if(any(t < 1 | t > nrow(par_mat))) {
                 stop("'t' should be between 1 and", nrow(par_mat))
             }
-            par_mat <- par_mat[t + (state - 1) * n,, drop = FALSE]
+            par_mat <- par_mat[t,, drop = FALSE]
             
             return(par_mat)
         }, 
@@ -410,12 +412,12 @@ SDE_HMM <- R6Class("SDE_HMM", inherit = SDE,
             if(length(wh_fixed) > 0) {
                 # If any fixed parameter, use fixed value
                 post_coeff_fe <- matrix(NA, nrow = nrow(post), ncol = length(self$coeff_fe()))
-                post_coeff_fe[, -wh_fixed] <- post[, which(colnames(post) == "coeff_fe")]
+                post_coeff_fe[, -wh_fixed] <- post[, which(names(par) == "coeff_fe")]
                 post_coeff_fe[, wh_fixed] <- rep(self$coeff_fe()[wh_fixed], each = n_post)                
             } else {
-                post_coeff_fe <- post[, which(colnames(post) == "coeff_fe")]
+                post_coeff_fe <- post[, which(names(par) == "coeff_fe")]
             }
-            post_coeff_re <- post[, which(colnames(post) == "coeff_re")]
+            post_coeff_re <- post[, which(names(par) == "coeff_re")]
             
             # Get SDE parameters over rows of X_fe and X_re, for each 
             # posterior sample of coeff_fe and coeff_re
